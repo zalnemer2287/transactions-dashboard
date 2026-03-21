@@ -1,14 +1,25 @@
 // Stores all fetched transactions so filters can be applied on the full dataset
 let allTransactions = [];
 
+// Stores AID definitions from the AID API so exact AID strings and names can be matched in logs
+let allAidItems = [];
+
 // API endpoints used by this page
 const API = {
   atmList: "https://dev.smartjournal.net/um/test/api/jr/txn/atmlist/v1",
   aidList: "https://dev.smartjournal.net/um/test/api/jr/txn/aidlist/v1",
   txnList: function (id, ts) {
     return `https://dev.smartjournal.net/um/test/api/jr/txn/txnlist/${id}/${ts}/v1?n=30`;
+  },
+  txnLog: function (atmId, devTime) {
+    return `https://dev.smartjournal.net/um/test/api/jr/txn/log/v1?a=${atmId}&t=${devTime}`;
   }
 };
+
+// Function is used to allow live updates when loading logs
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 /* ---------------------------------------
    Page startup
@@ -157,6 +168,12 @@ async function fetchTransactionsForPair(id, ts) {
   return data.txn || [];
 }
 
+// Fetches the detailed transaction log using the ATM id and devTime for a transaction
+async function fetchTransactionLog(atmId, devTime) {
+  const response = await fetch(API.txnLog(atmId, devTime));
+  return await response.text();
+}
+
 /* ---------------------------------------
    Table formatting helpers
 --------------------------------------- */
@@ -220,6 +237,259 @@ function buildCode(txn) {
   return "";
 }
 
+// Escapes HTML before inserting text into the table
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+// Converts newline characters into <br> tags for table display
+function formatMultilineHtml(value) {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+// Builds the final Code cell display using the original code plus extracted log details
+function buildDisplayCode(txn) {
+  const lines = [];
+  const baseCode = buildCode(txn);
+
+  if (baseCode) {
+    lines.push(baseCode);
+  }
+
+  if (txn.extractedAid) {
+    lines.push(`AID: ${txn.extractedAid}`);
+  }
+
+  if (txn.extractedAidName) {
+    lines.push(`EMV: ${txn.extractedAidName}`);
+  }
+
+  if (txn.extractedStatus) {
+    lines.push(`Status: ${txn.extractedStatus}`);
+  }
+
+  if (txn.extractedSequence) {
+    lines.push(`SEQ: ${txn.extractedSequence}`);
+  }
+
+  if (txn.extractedTime) {
+    lines.push(`Time: ${txn.extractedTime}`);
+  }
+
+  if (lines.length === 0) {
+    return "";
+  }
+
+  return lines.join("\n");
+}
+
+/* ---------------------------------------
+   Transaction log extraction helpers
+--------------------------------------- */
+
+// Removes HTML tags from the log response so text patterns can be searched reliably
+function stripHtml(html) {
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  return temp.textContent || temp.innerText || "";
+}
+
+// Normalizes spacing in extracted log text
+function normalizeLogText(text) {
+  return text
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n+/g, "\n");
+}
+
+// Normalizes a label for looser name matching
+function normalizeName(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Finds an AID list item by exact AID number match inside the log text
+function findAidItemByAidValue(logText) {
+  const upperText = logText.toUpperCase();
+
+  for (const item of allAidItems) {
+    const aidValue = String(item.aid || "").trim().toUpperCase();
+
+    if (aidValue && upperText.includes(aidValue)) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+// Finds an AID list item by exact or near-exact AID / EMV name match inside the log text
+function findAidItemByName(logText) {
+  const normalizedLog = normalizeName(logText);
+
+  for (const item of allAidItems) {
+    const normalizedItemName = normalizeName(item.name);
+
+    if (normalizedItemName && normalizedLog.includes(normalizedItemName)) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+// Tries to recover the full AID list item using either number or name
+function findAidItemFromKnownList(logText) {
+  const byAidValue = findAidItemByAidValue(logText);
+  if (byAidValue) {
+    return byAidValue;
+  }
+
+  const byName = findAidItemByName(logText);
+  if (byName) {
+    return byName;
+  }
+
+  return null;
+}
+
+// Looks for an AID using explicit patterns or general AID-like tokens
+function extractAidValueFromPatterns(logText) {
+  const explicitPatterns = [
+    /EMV FINAL APP SELECTION SUCCESS:\s*([A-F0-9]{10,32})/i,
+    /\bAID[:\s]+([A-F0-9]{10,32})\b/i,
+    /\b([A][0-9A-F]{9,31})\b/i
+  ];
+
+  for (const pattern of explicitPatterns) {
+    const match = logText.match(pattern);
+    if (match && match[1]) {
+      return match[1].toUpperCase();
+    }
+  }
+
+  return "";
+}
+
+// Finds the matching list item from an extracted AID value
+function findAidItemByExactAidValue(aidValue) {
+  const normalizedAidValue = String(aidValue || "").trim().toUpperCase();
+
+  for (const item of allAidItems) {
+    const listAidValue = String(item.aid || "").trim().toUpperCase();
+
+    if (listAidValue && listAidValue === normalizedAidValue) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+// Extracts a rough transaction outcome or status from the log text
+function extractStatusFromLog(logText) {
+  const statusPatterns = [
+    { pattern: /TRANSACTION DATA\s*\((COMPLETED)\)/i, value: "COMPLETED" },
+    { pattern: /"Status"\s*:\s*"([^"]+)"/i, valueFromMatch: true },
+    { pattern: /Transaction canceled by host/i, value: "CANCELED BY HOST" },
+    { pattern: /TRANSACTION ABORTED/i, value: "ABORTED" },
+    { pattern: /NO HOST RESPONSE/i, value: "NO HOST RESPONSE" },
+    { pattern: /INCONCLUSIVE/i, value: "INCONCLUSIVE" },
+    { pattern: /DECLINED/i, value: "DECLINED" },
+    { pattern: /COMPLETED/i, value: "COMPLETED" }
+  ];
+
+  for (const item of statusPatterns) {
+    const match = logText.match(item.pattern);
+
+    if (match) {
+      if (item.valueFromMatch && match[1]) {
+        return match[1].toUpperCase();
+      }
+
+      return item.value;
+    }
+  }
+
+  return "";
+}
+
+// Extracts a sequence or trace value from the log text
+function extractSequenceFromLog(logText) {
+  const sequencePatterns = [
+    /TRACE NO:\s*([0-9]+)/i,
+    /Trans SEQ Number\s*\[([0-9]+)\]/i,
+    /"seqNumber"\s*:\s*"([^"]+)"/i,
+    /UUID:\s*<([^>]+)>/i
+  ];
+
+  for (const pattern of sequencePatterns) {
+    const match = logText.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
+// Extracts a useful timestamp-like value from the log text
+function extractTimeFromLog(logText) {
+  const timePatterns = [
+    /\[([0-9]{4}\/[0-9]{2}\/[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})\]/,
+    /\b([0-9]{2}\/[0-9]{2}\/[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})\b/,
+    /\b([0-9]{2}\/[0-9]{2}\/[0-9]{2}\s+[0-9]{2}:[0-9]{2})\b/
+  ];
+
+  for (const pattern of timePatterns) {
+    const match = logText.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return "";
+}
+
+// Parses one raw log response and returns extracted values used by the table
+function extractLogDetails(rawLogHtml) {
+  const plainText = normalizeLogText(stripHtml(rawLogHtml));
+
+  const matchedAidItem = findAidItemFromKnownList(plainText);
+  const extractedPatternAid = extractAidValueFromPatterns(plainText);
+
+  let extractedAid = "";
+  let extractedAidName = "";
+
+  if (matchedAidItem) {
+    extractedAid = String(matchedAidItem.aid || "").trim().toUpperCase();
+    extractedAidName = String(matchedAidItem.name || "").trim();
+  } else if (extractedPatternAid) {
+    extractedAid = extractedPatternAid;
+
+    const mappedAidItem = findAidItemByExactAidValue(extractedPatternAid);
+    if (mappedAidItem) {
+      extractedAidName = String(mappedAidItem.name || "").trim();
+    }
+  }
+
+  return {
+    extractedAid: extractedAid,
+    extractedAidName: extractedAidName,
+    extractedStatus: extractStatusFromLog(plainText),
+    extractedSequence: extractSequenceFromLog(plainText),
+    extractedTime: extractTimeFromLog(plainText)
+  };
+}
+
 /* ---------------------------------------
    Table rendering
 --------------------------------------- */
@@ -235,11 +505,11 @@ function displayTransactions(transactions) {
     const row = document.createElement("tr");
 
     row.innerHTML = `
-      <td>${formatDevTime(txn.devTime)}</td>
-      <td>${txn.atm && txn.atm.txt ? txn.atm.txt : ""}</td>
-      <td>${txn.pan || ""}</td>
-      <td>${buildDescription(txn)}</td>
-      <td>${buildCode(txn)}</td>
+      <td>${escapeHtml(formatDevTime(txn.devTime))}</td>
+      <td>${escapeHtml(txn.atm && txn.atm.txt ? txn.atm.txt : "")}</td>
+      <td>${escapeHtml(txn.pan || "")}</td>
+      <td>${escapeHtml(buildDescription(txn))}</td>
+      <td>${formatMultilineHtml(buildDisplayCode(txn))}</td>
     `;
 
     tableBody.appendChild(row);
@@ -253,7 +523,7 @@ function showTableMessage(message) {
 
   tableBody.innerHTML = `
     <tr>
-      <td colspan="5" class="tableMessage">${message}</td>
+      <td colspan="5" class="tableMessage">${escapeHtml(message)}</td>
     </tr>
   `;
 }
@@ -571,7 +841,7 @@ function applyFilters() {
         (txn.atm && txn.atm.txt) || "",
         txn.pan || "",
         buildDescription(txn),
-        buildCode(txn)
+        buildDisplayCode(txn)
       ]
         .join(" ")
         .toLowerCase();
@@ -632,6 +902,53 @@ function setupTextFilters() {
 }
 
 /* ---------------------------------------
+   log enrichment
+--------------------------------------- */
+
+async function enrichTransactionsWithLogs(transactions) {
+  const batchSize = 5;
+  let completedBatches = 0;
+
+  for (let i = 0; i < transactions.length; i += batchSize) {
+    const batch = transactions.slice(i, i + batchSize);
+
+    await Promise.all(
+      batch.map(async function (txn) {
+        try {
+          const atmId = txn.atm && txn.atm.id;
+          const devTime = txn.devTime;
+
+          if (!atmId || !devTime) {
+            return;
+          }
+
+          const rawLog = await fetchTransactionLog(atmId, devTime);
+          const details = extractLogDetails(rawLog);
+
+          txn.extractedAid = details.extractedAid;
+          txn.extractedAidName = details.extractedAidName;
+          txn.extractedStatus = details.extractedStatus;
+          txn.extractedSequence = details.extractedSequence;
+          txn.extractedTime = details.extractedTime;
+        } catch (error) {
+          // Log failures are ignored so the main table can still work
+        }
+      })
+    );
+
+    completedBatches += 1;
+
+    // Refresh every 4 batches instead of every batch
+    if (completedBatches % 4 === 0) {
+      applyFilters();
+    }
+  }
+
+  // Final refresh after all batches complete
+  applyFilters();
+}
+
+/* ---------------------------------------
    Main initialization
 --------------------------------------- */
 
@@ -643,14 +960,21 @@ async function init() {
   renderAtmDropdown(atmItems);
   setupAtmDropdownBehavior();
 
-  const aidItems = await getAidList();
-  renderAidDropdown(aidItems);
+  allAidItems = await getAidList();
+  renderAidDropdown(allAidItems);
   setupAidDropdownBehavior();
 
   setupTextFilters();
 
   const pairs = await getAtmIdTsPairs();
   allTransactions = [];
+
+  // -------------------------------
+  // STEP 1: Load transactions with progress
+  // -------------------------------
+
+  const totalPairs = pairs.length;
+  let loadedPairs = 0;
 
   for (const pair of pairs) {
     try {
@@ -660,9 +984,58 @@ async function init() {
         allTransactions = allTransactions.concat(txns);
       }
     } catch (error) {
-      // Failed requests are ignored so the rest of the data can still load
+      // ignore failures
     }
+
+    loadedPairs++;
+    showTableMessage(`Loading transactions (${loadedPairs} / ${totalPairs})...`);
+    await sleep(0); // allow UI to update
   }
+
+  // -------------------------------
+  // STEP 2: Load logs with progress
+  // -------------------------------
+
+  const totalLogs = allTransactions.length;
+  let loadedLogs = 0;
+
+  showTableMessage(`Loading logs (0 / ${totalLogs})...`);
+
+  const batchSize = 5;
+
+  for (let i = 0; i < allTransactions.length; i += batchSize) {
+    const batch = allTransactions.slice(i, i + batchSize);
+
+    await Promise.all(
+      batch.map(async function (txn) {
+        try {
+          const atmId = txn.atm && txn.atm.id;
+          const devTime = txn.devTime;
+
+          if (!atmId || !devTime) return;
+
+          const rawLog = await fetchTransactionLog(atmId, devTime);
+          const details = extractLogDetails(rawLog);
+
+          txn.extractedAid = details.extractedAid;
+          txn.extractedAidName = details.extractedAidName;
+          txn.extractedStatus = details.extractedStatus;
+          txn.extractedSequence = details.extractedSequence;
+          txn.extractedTime = details.extractedTime;
+        } catch (error) {
+          // ignore log failures
+        }
+
+        loadedLogs++;
+        showTableMessage(`Loading logs (${loadedLogs} / ${totalLogs})...`);
+        await sleep(0); // allow UI to repaint
+      })
+    );
+  }
+
+  // -------------------------------
+  // STEP 3: Final render
+  // -------------------------------
 
   applyFilters();
 }
