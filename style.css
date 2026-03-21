@@ -1,0 +1,446 @@
+/* Base styles */
+
+body {
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 400;
+  background: #f3f3f3;
+}
+
+/* Layout */
+
+.container {
+  display: flex;
+}
+
+.main {
+  flex: 1;
+  padding: 20px;
+  background: transparent;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Sidebar */
+
+.sidebar {
+  width: 220px;
+  background: transparent;
+  padding: 12px;
+}
+
+.sidebarMain {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 12px 12px 18px;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  position: relative;
+}
+
+.sidebarMain.active {
+  background: #dddddd;
+}
+
+.sidebarMain.active::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  background: #2f80ed;
+  border-radius: 4px;
+}
+
+.sidebarMain:hover {
+  background: #e6e6e6;
+  border-radius: 6px;
+}
+
+.sidebarMain.active:hover {
+  background: #e5e5e5;
+}
+
+.submenu {
+  margin-top: -4px;
+  margin-bottom: 10px;
+  padding-left: 12px;
+}
+
+.submenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.submenuItem:hover {
+  background: #e6e6e6;
+  border-radius: 6px;
+}
+
+/* Header and actions */
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.headerRow h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.actions button {
+  min-width: 110px;
+  margin-left: 10px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.actions button:hover {
+  background: #f5f5f5;
+}
+
+/* Filters bar */
+
+.filtersBar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.5fr 1.5fr 1.5fr;
+  gap: 14px;
+  margin-top: 20px;
+  margin-bottom: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
+.filterGroup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.filterGroup label {
+  margin-bottom: 5px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.filterGroup input,
+.dropdownBtn {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.filterGroup input {
+  padding: 7px;
+  font-size: 14px;
+}
+
+.filterGroup input,
+.dropdownBtn,
+#searchInput {
+  border: 1.5px solid #ccc;
+  border-radius: 5px;
+}
+
+/* Date filter */
+
+.dateFilterGroup {
+  min-width: 0;
+}
+
+.dateInputWrap {
+  position: relative;
+  width: 100%;
+}
+
+#dateRange {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 56px 8px 10px;
+}
+
+.dateInlineIcon {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.clearDateBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Dropdown filters */
+
+.dropdownBtn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  background: white;
+  border: 1px solid #ccc;
+}
+
+.dropdownArrow {
+  margin-left: 10px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.dropdownPanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 0;
+  background: white;
+  border: 1px solid #ccc;
+}
+
+.checkRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkRow:last-child {
+  border-bottom: none;
+}
+
+.checkRow:hover {
+  background: #f5f5f5;
+}
+
+.checkLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkRow input[type="checkbox"] {
+  margin: 0;
+}
+
+.allOptionLabel {
+  color: red;
+  font-weight: bold;
+}
+
+.checkContent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.checkSubLabel {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #666;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Code column search */
+
+.codeHeader {
+  padding: 8px 10px;
+}
+
+.codeHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.codeHeaderRow span {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.codeSearch {
+  position: relative;
+}
+
+#searchInput {
+  padding: 6px 10px 6px 28px;
+}
+
+.searchInlineIcon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.codeSearch input {
+  width: 140px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.codeSearch button {
+  padding: 6px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Table */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+tr:hover {
+  background-color: #f2f2f2;
+}
+
+#transactionsTable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: white;
+  font-size: 14px;
+  border-left: 1.5px solid #ccc;
+  border-right: 1.5px solid #ccc;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#transactionsTable th,
+#transactionsTable td {
+  padding: 10px;
+  vertical-align: top;
+  border-top: 1.5px solid #ccc;
+  border-bottom: 1.5px solid #ccc;
+  border-left: none;
+  border-right: none;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+#transactionsTable th {
+  vertical-align: middle;
+  text-align: left;
+  background: #fafafa;
+  font-weight: 600;
+}
+
+#transactionsTable th:nth-child(1),
+#transactionsTable td:nth-child(1) {
+  width: 12%;
+}
+
+#transactionsTable th:nth-child(2),
+#transactionsTable td:nth-child(2) {
+  width: 10%;
+}
+
+#transactionsTable th:nth-child(3),
+#transactionsTable td:nth-child(3) {
+  width: 18%;
+}
+
+#transactionsTable th:nth-child(4),
+#transactionsTable td:nth-child(4) {
+  width: 36%;
+}
+
+#transactionsTable th:nth-child(5),
+#transactionsTable td:nth-child(5) {
+  width: 24%;
+}
+
+#transactionsTable th:first-child {
+  border-top-left-radius: 10px;
+}
+
+#transactionsTable th:last-child {
+  border-top-right-radius: 10px;
+}
+
+#transactionsTable tr:last-child td:first-child {
+  border-bottom-left-radius: 10px;
+}
+
+#transactionsTable tr:last-child td:last-child {
+  border-bottom-right-radius: 10px;
+}
+
+.tableMessage {
+  padding: 24px 12px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+/* Validation */
+
+#serialFilter.inputError {
+  border: 2px solid red !important;
+}
+
+#serialFilter.inputError:focus {
+  outline: none;
+  border: 2px solid red !important;
+  box-shadow: 0 0 0 1px red !important;
+}
